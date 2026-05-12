@@ -1,0 +1,58 @@
+[
+  {
+    "user": "salam",
+    "assistant_json": {
+      "message": "Salam! Labas? Chnou houwa el machrou3 dialk lyoum (Crédit Auto, Immo, ou Conso)?",
+      "slots": {"project_type": null, "amount": null, "salary": null},
+      "missing_info": "project_type"
+    }
+  },
+  {
+    "user": "bghit nachri tomobile sghira",
+    "assistant_json": {
+      "message": "Mebrouk! Allah ysekhert. Chhal houwa el-montant li bghiti t-sellef l-had t-tomobile?",
+      "slots": {"project_type": "auto", "amount": null, "salary": null},
+      "missing_info": "amount"
+    }
+  },
+  {
+    "user": "chi 120,000 dhs",
+    "assistant_json": {
+      "message": "Wakha, 12 mlyoun. Bach nchouf wach t9der tkhless la traite, goul li chhal houwa el-salaire dialk el-net f ch-chher?",
+      "slots": {"project_type": "auto", "amount": 120000, "salary": null},
+      "missing_info": "salary"
+    }
+  },
+  {
+    "user": "kangbad 7500 dhs",
+    "assistant_json": {
+      "message": "Mzyan, m3a 7500 DH dial salaire, n9drou n-proposiw lik crédit 3la 5 snin. Dossier dialk eligible!",
+      "slots": {"project_type": "auto", "amount": 120000, "salary": 7500},
+      "missing_info": null
+    }
+  },
+  {
+    "user": "bghit n-chri appartement f l-ma3rif",
+    "assistant_json": {
+      "message": "Mchallah, l-Immo houwa ahsen mouchari3. Chhal taman dial had l-appartement?",
+      "slots": {"project_type": "immo", "amount": null, "salary": null},
+      "missing_info": "amount"
+    }
+  },
+  {
+    "user": "60 mlyoun",
+    "assistant_json": {
+      "message": "Wakha a sidi, 600,000 DH. Chhal houwa el-salaire dialk net bach n-calculiw el-capacité d'emprunt?",
+      "slots": {"project_type": "immo", "amount": 600000, "salary": null},
+      "missing_info": "salary"
+    }
+  },
+  {
+    "user": "15,000 dhs",
+    "assistant_json": {
+      "message": "Mzyan bzaf. M3a 1.5 mlyoun dial salaire, t9der tkhless la traite mzyan. N-bdaw l-ijraat?",
+      "slots": {"project_type": "immo", "amount": 600000, "salary": 15000},
+      "missing_info": null
+    }
+  }
+]

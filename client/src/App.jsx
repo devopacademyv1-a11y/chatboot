@@ -174,38 +174,94 @@ const App = () => {
   };
 
   return (
-    <div className="dashboard-container" style={{ display: 'grid', gridTemplateColumns: '350px 1fr', height: '100vh', background: 'var(--bg-darker)' }}>
+    <div className="dashboard-container">
+      <style>{`
+        .dashboard-container {
+          display: grid;
+          grid-template-columns: 350px 1fr;
+          height: 100vh;
+          background: var(--bg-darker);
+        }
+        .chat-main {
+          display: flex; 
+          flex-direction: column; 
+          overflow: hidden;
+        }
+        .chat-messages {
+          flex: 1; 
+          overflow-y: auto; 
+          padding: 2rem;
+        }
+        .chat-input-area {
+          padding: 2rem; 
+          background: var(--bg-dark); 
+          border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        @media (max-width: 900px) {
+          .dashboard-container {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100dvh;
+          }
+          aside {
+            padding: 1rem !important;
+            border-right: none !important;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+          }
+          .card-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+          .gauge-card {
+             grid-column: span 2;
+             margin-top: 10px !important;
+          }
+          .chat-messages {
+            padding: 1rem !important;
+          }
+          .chat-input-area {
+            padding: 1rem !important;
+          }
+          .message-bubble {
+            max-width: 85% !important;
+            padding: 0.8rem !important;
+            font-size: 0.9rem !important;
+          }
+        }
+      `}</style>
       
       {/* SIDEBAR: LEAD QUALIFICATION */}
       <aside style={{ background: 'var(--bg-dark)', borderRight: '1px solid rgba(255,255,255,0.1)', padding: '2rem', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2.5rem' }}>
-          <Landmark color="var(--primary)" size={32} />
-          <h2 style={{ margin: 0 }}>Qualification</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
+          <Landmark color="var(--primary)" size={24} />
+          <h3 style={{ margin: 0 }}>Qualification</h3>
         </div>
 
-        {/* FINANCIAL DATA CARDS */}
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Projet</div>
-          <div style={{ fontWeight: 'bold', textTransform: 'capitalize' }}>{slots.project_type || 'En attente...'}</div>
-        </div>
+        <div className="card-grid">
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Projet</div>
+            <div style={{ fontWeight: 'bold', textTransform: 'capitalize', fontSize: '0.9rem' }}>{slots.project_type || '---'}</div>
+          </div>
 
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Montant Souhaité</div>
-          <div style={{ fontWeight: 'bold' }}>{slots.amount ? `${slots.amount.toLocaleString()} MAD` : 'En attente...'}</div>
-        </div>
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Montant</div>
+            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{slots.amount ? `${slots.amount.toLocaleString()} DH` : '---'}</div>
+          </div>
 
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Salaire Net Mensuel</div>
-          <div style={{ fontWeight: 'bold' }}>{slots.salary ? `${slots.salary.toLocaleString()} MAD` : 'En attente...'}</div>
+          <div className="card" style={{ marginBottom: '1rem' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Salaire</div>
+            <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{slots.salary ? `${slots.salary.toLocaleString()} DH` : '---'}</div>
+          </div>
         </div>
 
         {/* DEBT RATIO GAUGE */}
-        <div className="card" style={{ marginTop: 'auto', background: 'rgba(0,0,0,0.2)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <span style={{ fontSize: '0.8rem' }}>Taux d'endettement</span>
-            <span style={{ fontWeight: 'bold', color: debtRatio > 40 ? '#ff4757' : '#2ed573' }}>{debtRatio}%</span>
+        <div className="card gauge-card" style={{ marginTop: 'auto', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.7rem' }}>Endettement</span>
+            <span style={{ fontWeight: 'bold', color: debtRatio > 40 ? '#ff4757' : '#2ed573', fontSize: '0.8rem' }}>{debtRatio}%</span>
           </div>
-          <div style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+          <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
             <div style={{ 
               height: '100%', 
               width: `${Math.min(debtRatio, 100)}%`, 
@@ -213,30 +269,23 @@ const App = () => {
               transition: 'width 0.5s ease'
             }} />
           </div>
-          <div style={{ marginTop: '15px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
-            {debtRatio > 40 ? (
-              <><AlertCircle size={14} color="#ff4757" /> Dossier Risqué (&gt;40%)</>
-            ) : slots.salary ? (
-              <><CheckCircle size={14} color="#2ed573" /> Dossier Éligible</>
-            ) : null}
-          </div>
         </div>
       </aside>
 
       {/* MAIN CHAT AREA */}
-      <main style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <main className="chat-main">
         <header style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-dark)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Bot color="var(--primary)" />
-            <h3 style={{ margin: 0 }}>Conseiller Bancaire AI</h3>
+            <h3 style={{ margin: 0 }}>Conseiller AI</h3>
           </div>
           <Globe size={18} color="var(--text-muted)" />
         </header>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
+        <div className="chat-messages">
           {messages.map((msg, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '1.5rem' }}>
-              <div style={{ 
+              <div className="message-bubble" style={{ 
                 maxWidth: '70%', padding: '1.2rem', borderRadius: '18px',
                 background: msg.role === 'user' ? 'var(--primary)' : 'var(--glass)',
                 border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.1)'
@@ -250,22 +299,22 @@ const App = () => {
               </div>
             </div>
           ))}
-          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Analyse financière en cours...</div>}
+          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Analyse financière...</div>}
           <div ref={scrollRef} />
         </div>
 
-        <div style={{ padding: '2rem', background: 'var(--bg-dark)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', maxWidth: '900px', margin: '0 auto' }}>
+        <div className="chat-input-area">
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', maxWidth: '900px', margin: '0 auto' }}>
             <button onMouseDown={startRecording} onMouseUp={stopRecording}
-              style={{ width: '55px', height: '55px', borderRadius: '50%', background: isRecording ? '#ff4757' : 'var(--glass)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isRecording ? <StopCircle /> : <Mic />}
+              style={{ width: '50px', height: '50px', borderRadius: '50%', background: isRecording ? '#ff4757' : 'var(--glass)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {isRecording ? <StopCircle /> : <Mic size={20} />}
             </button>
             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendText()}
-              placeholder="Ex: Je gagne 8000 dhs et je veux un crédit..."
-              style={{ flex: 1, padding: '1rem 1.5rem', borderRadius: '30px', background: 'var(--glass)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', outline: 'none', fontSize: '1rem' }} />
+              placeholder="Message..."
+              style={{ flex: 1, padding: '0.8rem 1.2rem', borderRadius: '30px', background: 'var(--glass)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', outline: 'none', fontSize: '1rem', minWidth: 0 }} />
             <button onClick={handleSendText}
-              style={{ width: '55px', height: '55px', borderRadius: '50%', background: 'var(--primary)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Send size={22} />
+              style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'var(--primary)', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Send size={20} />
             </button>
           </div>
         </div>
