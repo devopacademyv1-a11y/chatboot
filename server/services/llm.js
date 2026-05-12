@@ -5,19 +5,27 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:3b';
 
 const BANKING_SYSTEM_PROMPT = `
 You are a Professional Moroccan Banking Advisor for Trinnova Bank.
-Speak ONLY Moroccan Darija + French banking terms.
+Speak ONLY in a mix of Moroccan Darija (Arabizi) and French banking terms.
 
-Current Goal: Collect project_type, amount, salary to qualify the lead.
+FEW-SHOT EXAMPLES (Follow this style):
+User: "salam"
+Assistant: {"message": "Salam! Labas? Chnou houwa el machrou3 dialk lyoum (Crédit Auto, Immo, Conso)?", "slots": {"project_type": null, "amount": null, "salary": null}, "missing_info": "project_type"}
 
-Output Format (STRICT JSON):
-{"message": "string", "slots": {"project_type": "string", "amount": number, "salary": number}, "missing_info": "string"}
+User: "bghit nachri tomobile"
+Assistant: {"message": "Mebrouk! Chhal taman dial had t-tomobile li bghiti tchri?", "slots": {"project_type": "auto", "amount": null, "salary": null}, "missing_info": "amount"}
+
+User: "36000"
+Assistant: {"message": "Wakha, 36,000 DH. Bach nchouf wach t9der tkhless la traite, chhal houwa el-salaire dialk f ch-chher?", "slots": {"project_type": "auto", "amount": 36000, "salary": null}, "missing_info": "salary"}
+
+User: "8000 dhs"
+Assistant: {"message": "Mzyan, salaire dial 8000 DH kafi l-had el-crédit. Dossier dialk eligible!", "slots": {"project_type": "auto", "amount": 36000, "salary": 8000}, "missing_info": null}
+
+STRICT RULE: Return ONLY JSON. Use the style above.
 `.trim();
 
 async function generateResponse(userMessage, history = [], lang = 'mixed') {
     try {
-        // Build a clean history for Qwen
         let conversation = history.slice(-4).map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n');
-        
         const fullPrompt = `<|im_start|>system\n${BANKING_SYSTEM_PROMPT}<|im_end|>\n${conversation}\n<|im_start|>user\n${userMessage}<|im_end|>\n<|im_start|>assistant\n`;
 
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
@@ -25,12 +33,13 @@ async function generateResponse(userMessage, history = [], lang = 'mixed') {
             prompt: fullPrompt,
             stream: false,
             format: "json",
-            options: { stop: ["<|im_end|>", "<|im_start|>"], temperature: 0.4 }
+            options: { temperature: 0.3, stop: ["<|im_end|>", "<|im_start|>"] }
         });
 
         return JSON.parse(response.data.response);
     } catch (error) {
-        return { message: "Smeh li, t-mecha l-connexion. T9der t3awed?", slots: {}, missing_info: null };
+        console.error('LLM Error:', error.message);
+        return { message: "Smeh li, mouchkil f l-connexion. 3awed 3afak.", slots: {}, missing_info: null };
     }
 }
 
@@ -44,7 +53,7 @@ async function streamResponse(userMessage, history = [], res) {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: true,
-            options: { stop: ["<|im_end|>", "<|im_start|>"], temperature: 0.4 }
+            options: { temperature: 0.3, stop: ["<|im_end|>", "<|im_start|>"] }
         }, { responseType: 'stream' });
 
         let fullText = '';
