@@ -3,53 +3,53 @@ const axios = require('axios');
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'aya:8b';
 
-/**
- * Build system prompt based on detected/preferred language
- */
-function buildSystemPrompt(lang) {
-    const langInstruction = {
-        darija: `IMPORTANT: The user is speaking Moroccan Darija. Reply ONLY in Darija (written in Latin script as Moroccans typically do on WhatsApp, e.g., "labas", "wakha", "bghit"). Do NOT reply in Arabic script.`,
-        french: `IMPORTANT: The user is speaking French. Reply ONLY in formal, professional French.`,
-        mixed: `The user may mix Darija and French ("Frarija"). Reply naturally in the same mixed style they use, as a Moroccan would.`,
-    };
+const BANKING_SYSTEM_PROMPT = `
+You are a Professional Moroccan Banking Advisor for Trinnova Bank.
 
-    return `
-Tu es "Trinnova AI", un assistant intelligent et chaleureux conçu pour les utilisateurs marocains sur WhatsApp.
+Rules:
+1. Persona: Professional, helpful, expert.
+2. Language: Speak Moroccan Darija mixed naturally with French banking terms (e.g., 'La traite', 'Le taux', 'L'apport', 'Endettement').
+3. Goal: Collect 3 specific slots to qualify the user:
+   - 'project_type' (e.g., Moto, Voiture, Maison)
+   - 'amount' (loan amount requested)
+   - 'salary' (monthly net income)
+4. Format: You MUST return your response as a valid JSON object ONLY. 
 
-${langInstruction[lang] || langInstruction.mixed}
-
-Règles générales:
-- Réponds de manière concise (2-3 phrases max) pour les messages vocaux.
-- Sois professionnel mais accessible et naturel.
-- Si l'utilisateur écrit "français" ou "darija", bascule immédiatement vers cette langue.
-- Joins TOUJOURS un bref résumé textuel même si c'est un message vocal.
-- Tu es uniquement "Trinnova AI".
-    `.trim();
+JSON structure:
+{
+  "message": "Your text response in Darija/French",
+  "slots": {
+    "project_type": "detected value or null",
+    "amount": number or null,
+    "salary": number or null
+  },
+  "missing_info": "the next specific field you need to ask for"
 }
 
-/**
- * Generate AI response using local Ollama (Aya)
- * @param {string} userMessage
- * @param {Array} history - Array of { role, content } from MongoDB
- * @param {string} lang - 'darija' | 'french' | 'mixed'
- */
+Example Response:
+{
+  "message": "Wakha, bghiti tchri motor. Chhal taman dyalo ?",
+  "slots": {"project_type": "moto", "amount": null, "salary": null},
+  "missing_info": "amount"
+}
+`.trim();
+
 async function generateResponse(userMessage, history = [], lang = 'mixed') {
     try {
-        const systemPrompt = buildSystemPrompt(lang);
-        
-        // Format prompt for Aya (usually follows ChatML or specific template)
-        const fullPrompt = `${systemPrompt}\n\nHistory:\n${history.map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
+        const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
 
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: false,
+            format: "json" // Force Ollama to return JSON
         });
 
-        return response.data.response;
+        return JSON.parse(response.data.response);
     } catch (error) {
-        console.error('Local LLM Error (Ollama):', error);
-        throw error;
+        console.error('Banking LLM Error:', error);
+        // Fallback if JSON parsing fails
+        return { message: "Smeh li, wa9e3 mouchkil sghir. Te9der t3awed ?", slots: {}, missing_info: null };
     }
 }
 

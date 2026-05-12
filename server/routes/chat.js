@@ -11,59 +11,56 @@ const { detectLanguage } = require('../utils/detectLanguage');
 const upload = multer({ dest: 'temp/' });
 
 /**
- * Handle Text Chat
+ * Handle Lead Qualification Chat
  */
 router.post('/text', async (req, res) => {
     const { message, history } = req.body;
 
     try {
         const { lang } = detectLanguage(message);
-        const aiResponse = await generateResponse(message, history, lang);
+        const aiData = await generateResponse(message, history, lang);
         
         res.json({ 
-            response: aiResponse,
+            response: aiData.message,
+            slots: aiData.slots,
+            missing_info: aiData.missing_info,
             lang: lang 
         });
     } catch (error) {
         console.error('Chat Error:', error);
-        res.status(500).json({ error: 'Failed to process message' });
+        res.status(500).json({ error: 'Failed to process lead' });
     }
 });
 
 /**
- * Handle Voice Chat
+ * Handle Voice Lead Qualification
  */
 router.post('/voice', upload.single('audio'), async (req, res) => {
     const audioFile = req.file;
     const history = JSON.parse(req.body.history || '[]');
 
     try {
-        // 1. Transcribe
         const transcription = await transcribeAudio(audioFile.path);
-        
-        // 2. Language Detection
         const { lang } = detectLanguage(transcription);
+        const aiData = await generateResponse(transcription, history, lang);
         
-        // 3. AI Response
-        const aiResponse = await generateResponse(transcription, history, lang);
-        
-        // 4. TTS (Local)
         const audioOutFilename = `response_${Date.now()}.wav`;
         const audioOutPath = path.join(__dirname, '../temp', audioOutFilename);
-        await generateSpeech(aiResponse, audioOutPath, lang);
+        await generateSpeech(aiData.message, audioOutPath, lang);
 
         res.json({
             transcription,
-            response: aiResponse,
+            response: aiData.message,
+            slots: aiData.slots,
+            missing_info: aiData.missing_info,
             audioUrl: `/temp/${audioOutFilename}`,
             lang: lang
         });
 
-        // Cleanup input file
         fs.unlink(audioFile.path, () => {});
     } catch (error) {
-        console.error('Voice Chat Error:', error);
-        res.status(500).json({ error: 'Failed to process voice message' });
+        console.error('Voice Lead Error:', error);
+        res.status(500).json({ error: 'Failed to process voice lead' });
     }
 });
 
