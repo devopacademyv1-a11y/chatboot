@@ -75,18 +75,44 @@ const App = () => {
           const data = JSON.parse(line.replace('data: ', ''));
           if (data.token) {
             streamedText += data.token;
+            let displayContent = streamedText;
+            
+            // If it looks like JSON, try to extract the message part for a cleaner UI while streaming
+            if (streamedText.trim().startsWith('{')) {
+              const match = streamedText.match(/"message"\s*:\s*"([^"]*)"/);
+              if (match) displayContent = match[1];
+              else displayContent = "Analyse en cours...";
+            }
+
             setMessages(prev => {
               const updated = [...prev];
-              updated[updated.length - 1] = { role: 'assistant', content: streamedText, lang: 'mixed', streaming: true };
+              updated[updated.length - 1] = { role: 'assistant', content: displayContent, lang: 'mixed', streaming: true };
               return updated;
             });
           }
           if (data.done) {
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1].streaming = false;
-              return updated;
-            });
+            try {
+              // Try to parse the full text as JSON if it's structured
+              const finalJson = JSON.parse(streamedText);
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { 
+                  role: 'assistant', 
+                  content: finalJson.message || streamedText, 
+                  lang: 'mixed', 
+                  streaming: false 
+                };
+                return updated;
+              });
+              if (finalJson.slots) handleUpdateSlots(finalJson.slots);
+            } catch (e) {
+              // Not JSON or partial JSON, just finish streaming
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1].streaming = false;
+                return updated;
+              });
+            }
           }
         }
       }
