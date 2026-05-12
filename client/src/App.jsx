@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Mic, Send, Volume2, StopCircle, User, Bot, Globe } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000/api/chat';
+const API_BASE = '/api/chat';
 
 const App = () => {
   const [messages, setMessages] = useState([
@@ -75,7 +75,7 @@ const App = () => {
       ]);
 
       if (res.data.audioUrl) {
-        const audio = new Audio(`http://localhost:5000${res.data.audioUrl}`);
+        const audio = new Audio(res.data.audioUrl);
         audio.play();
       }
     } catch (err) {
@@ -115,7 +115,7 @@ const App = () => {
               {msg.lang && <div style={{ fontSize: '0.7rem', marginTop: '5px', opacity: 0.6, textTransform: 'uppercase' }}>{msg.lang}</div>}
               {msg.audioUrl && (
                 <button 
-                  onClick={() => new Audio(`http://localhost:5000${msg.audioUrl}`).play()}
+                  onClick={() => new Audio(msg.audioUrl).play()}
                   style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginTop: '8px' }}
                 >
                   <Volume2 size={16} />
