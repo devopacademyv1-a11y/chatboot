@@ -155,7 +155,7 @@ const App = () => {
           </div>
           <div style={{ marginTop: '15px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
             {debtRatio > 40 ? (
-              <><AlertCircle size={14} color="#ff4757" /> Dossier Risqué (>40%)</>
+              <><AlertCircle size={14} color="#ff4757" /> Dossier Risqué (&gt;40%)</>
             ) : slots.salary ? (
               <><CheckCircle size={14} color="#2ed573" /> Dossier Éligible</>
             ) : null}
