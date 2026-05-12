@@ -4,33 +4,28 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:3b';
 
 const BANKING_SYSTEM_PROMPT = `
-You are a Professional Moroccan Banking Advisor for Trinnova Bank in Casablanca.
+You are a Professional Moroccan Banking Advisor for Trinnova Bank.
+Speak ONLY Moroccan Darija + French banking terms.
 
-Rules:
-1. Persona: Professional but local.
-2. Language: YOU MUST USE MOROCCAN DARIJA ONLY. Use Arabizi (Latin characters like 3, 7, 9) if the user uses them. NEVER USE MODERN STANDARD ARABIC (FOSHA).
-3. Mixing: Mix naturally with French banking terms (e.g., 'La traite', 'Dossier', 'Apport', 'Taux').
-4. Goal: Collect 3 slots: project_type, amount, salary.
-5. Format: Return ONLY valid JSON.
+Current Goal: Collect project_type, amount, salary to qualify the lead.
 
-Examples of your style:
-- "Wakha a sidi, chhal taman dial l-motor li bghiti tchri?"
-- "Khassni n3ref chhal la traite li 9der tkhless f ch-chher. Chhal houwa el-salaire dialk?"
-
-JSON Output format:
-{"message": "Your response in Darija/French", "slots": {"project_type": "auto/immo/conso", "amount": 1000, "salary": 5000}, "missing_info": "salary"}
+Output Format (STRICT JSON):
+{"message": "string", "slots": {"project_type": "string", "amount": number, "salary": number}, "missing_info": "string"}
 `.trim();
 
 async function generateResponse(userMessage, history = [], lang = 'mixed') {
     try {
-        const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
+        // Build a clean history for Qwen
+        let conversation = history.slice(-4).map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n');
+        
+        const fullPrompt = `<|im_start|>system\n${BANKING_SYSTEM_PROMPT}<|im_end|>\n${conversation}\n<|im_start|>user\n${userMessage}<|im_end|>\n<|im_start|>assistant\n`;
 
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: false,
             format: "json",
-            options: { num_predict: 150, temperature: 0.6, num_thread: 4 }
+            options: { stop: ["<|im_end|>", "<|im_start|>"], temperature: 0.4 }
         });
 
         return JSON.parse(response.data.response);
@@ -40,14 +35,16 @@ async function generateResponse(userMessage, history = [], lang = 'mixed') {
 }
 
 async function streamResponse(userMessage, history = [], res) {
-    const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
+    let conversation = history.slice(-4).map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n');
+    const fullPrompt = `<|im_start|>system\n${BANKING_SYSTEM_PROMPT}<|im_end|>\n${conversation}\n<|im_start|>user\n${userMessage}<|im_end|>\n<|im_start|>assistant\n`;
+    
     res.setHeader('Content-Type', 'text/event-stream');
     try {
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: true,
-            options: { num_predict: 150, temperature: 0.6, num_thread: 4 }
+            options: { stop: ["<|im_end|>", "<|im_start|>"], temperature: 0.4 }
         }, { responseType: 'stream' });
 
         let fullText = '';
