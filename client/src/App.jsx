@@ -41,22 +41,33 @@ const App = () => {
   };
 
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder.current = new MediaRecorder(stream);
-    audioChunks.current = [];
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Microphone access is only available over HTTPS or on localhost. Please see the 'Secure Origin' bypass instructions.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder.current = new MediaRecorder(stream);
+      audioChunks.current = [];
 
-    mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
-    mediaRecorder.current.onstop = async () => {
-      const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-      handleSendVoice(audioBlob);
-    };
+      mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
+      mediaRecorder.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+        handleSendVoice(audioBlob);
+      };
 
-    mediaRecorder.current.start();
-    setIsRecording(true);
+      mediaRecorder.current.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Mic access error:", err);
+      alert("Could not access microphone. Make sure you gave permission.");
+    }
   };
 
   const stopRecording = () => {
-    mediaRecorder.current.stop();
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+      mediaRecorder.current.stop();
+    }
     setIsRecording(false);
   };
 
