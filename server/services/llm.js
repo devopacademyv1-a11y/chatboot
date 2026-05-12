@@ -4,58 +4,51 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:3b';
 
 const BANKING_SYSTEM_PROMPT = `
-You are a professional Moroccan Banking Advisor for Trinnova Bank.
+You are a Professional Moroccan Banking Advisor for Trinnova Bank in Casablanca.
+
 Rules:
-1. Speak Moroccan Darija mixed with French banking terms.
-2. Your goal: collect project_type (Auto/Immo/Conso), amount, and salary.
-3. Be concise (2-3 sentences max).
-4. Return ONLY valid JSON:
-{"message":"your response","slots":{"project_type":null,"amount":null,"salary":null},"missing_info":"next field to ask"}
-5. Never break character. You are a banker from Casablanca.
+1. Persona: Professional but local.
+2. Language: YOU MUST USE MOROCCAN DARIJA ONLY. Use Arabizi (Latin characters like 3, 7, 9) if the user uses them. NEVER USE MODERN STANDARD ARABIC (FOSHA).
+3. Mixing: Mix naturally with French banking terms (e.g., 'La traite', 'Dossier', 'Apport', 'Taux').
+4. Goal: Collect 3 slots: project_type, amount, salary.
+5. Format: Return ONLY valid JSON.
+
+Examples of your style:
+- "Wakha a sidi, chhal taman dial l-motor li bghiti tchri?"
+- "Khassni n3ref chhal la traite li 9der tkhless f ch-chher. Chhal houwa el-salaire dialk?"
+
+JSON Output format:
+{"message": "Your response in Darija/French", "slots": {"project_type": "auto/immo/conso", "amount": 1000, "salary": 5000}, "missing_info": "salary"}
 `.trim();
 
 async function generateResponse(userMessage, history = [], lang = 'mixed') {
     try {
-        const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
+        const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
 
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: false,
             format: "json",
-            options: {
-                num_predict: 200,   // Limit token output for speed
-                temperature: 0.7,
-                num_thread: 4       // Use all available CPU threads
-            }
-        }, { timeout: 60000 });
+            options: { num_predict: 150, temperature: 0.6, num_thread: 4 }
+        });
 
         return JSON.parse(response.data.response);
     } catch (error) {
-        console.error('Banking LLM Error:', error.message);
-        return { 
-            message: "Smeh li, wa9e3 mouchkil sghir. Te9der t3awed daba?", 
-            slots: { project_type: null, amount: null, salary: null }, 
-            missing_info: null 
-        };
+        return { message: "Smeh li, t-mecha l-connexion. T9der t3awed?", slots: {}, missing_info: null };
     }
 }
 
-// Streaming version for real-time token output
 async function streamResponse(userMessage, history = [], res) {
-    const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
-
+    const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
     try {
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: true,
-            options: { num_predict: 250, temperature: 0.7, num_thread: 4 }
-        }, { responseType: 'stream', timeout: 60000 });
+            options: { num_predict: 150, temperature: 0.6, num_thread: 4 }
+        }, { responseType: 'stream' });
 
         let fullText = '';
         response.data.on('data', (chunk) => {
@@ -71,16 +64,10 @@ async function streamResponse(userMessage, history = [], res) {
                         res.write(`data: ${JSON.stringify({ done: true, full: fullText })}\n\n`);
                         res.end();
                     }
-                } catch (e) { /* skip */ }
+                } catch (e) {}
             }
         });
-
-        response.data.on('error', () => {
-            res.write(`data: ${JSON.stringify({ error: true })}\n\n`);
-            res.end();
-        });
     } catch (err) {
-        res.write(`data: ${JSON.stringify({ error: true })}\n\n`);
         res.end();
     }
 }
