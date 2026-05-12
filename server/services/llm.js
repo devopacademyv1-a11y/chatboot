@@ -1,56 +1,88 @@
 const axios = require('axios');
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'aya:8b';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:3b';
 
 const BANKING_SYSTEM_PROMPT = `
-You are a Professional Moroccan Banking Advisor for Trinnova Bank.
-
+You are a professional Moroccan Banking Advisor for Trinnova Bank.
 Rules:
-1. Persona: Professional, helpful, expert.
-2. Language: Speak Moroccan Darija mixed naturally with French banking terms (e.g., 'La traite', 'Le taux', 'L'apport', 'Endettement').
-3. Goal: Collect 3 specific slots to qualify the user:
-   - 'project_type' (e.g., Moto, Voiture, Maison)
-   - 'amount' (loan amount requested)
-   - 'salary' (monthly net income)
-4. Format: You MUST return your response as a valid JSON object ONLY. 
-
-JSON structure:
-{
-  "message": "Your text response in Darija/French",
-  "slots": {
-    "project_type": "detected value or null",
-    "amount": number or null,
-    "salary": number or null
-  },
-  "missing_info": "the next specific field you need to ask for"
-}
-
-Example Response:
-{
-  "message": "Wakha, bghiti tchri motor. Chhal taman dyalo ?",
-  "slots": {"project_type": "moto", "amount": null, "salary": null},
-  "missing_info": "amount"
-}
+1. Speak Moroccan Darija mixed with French banking terms.
+2. Your goal: collect project_type (Auto/Immo/Conso), amount, and salary.
+3. Be concise (2-3 sentences max).
+4. Return ONLY valid JSON:
+{"message":"your response","slots":{"project_type":null,"amount":null,"salary":null},"missing_info":"next field to ask"}
+5. Never break character. You are a banker from Casablanca.
 `.trim();
 
 async function generateResponse(userMessage, history = [], lang = 'mixed') {
     try {
-        const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
+        const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
 
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,
             prompt: fullPrompt,
             stream: false,
-            format: "json" // Force Ollama to return JSON
-        });
+            format: "json",
+            options: {
+                num_predict: 200,   // Limit token output for speed
+                temperature: 0.7,
+                num_thread: 4       // Use all available CPU threads
+            }
+        }, { timeout: 60000 });
 
         return JSON.parse(response.data.response);
     } catch (error) {
-        console.error('Banking LLM Error:', error);
-        // Fallback if JSON parsing fails
-        return { message: "Smeh li, wa9e3 mouchkil sghir. Te9der t3awed ?", slots: {}, missing_info: null };
+        console.error('Banking LLM Error:', error.message);
+        return { 
+            message: "Smeh li, wa9e3 mouchkil sghir. Te9der t3awed daba?", 
+            slots: { project_type: null, amount: null, salary: null }, 
+            missing_info: null 
+        };
     }
 }
 
-module.exports = { generateResponse };
+// Streaming version for real-time token output
+async function streamResponse(userMessage, history = [], res) {
+    const fullPrompt = `${BANKING_SYSTEM_PROMPT}\n\nHistory:\n${history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n')}\nUser: ${userMessage}\nAssistant:`;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+        const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+            model: OLLAMA_MODEL,
+            prompt: fullPrompt,
+            stream: true,
+            options: { num_predict: 250, temperature: 0.7, num_thread: 4 }
+        }, { responseType: 'stream', timeout: 60000 });
+
+        let fullText = '';
+        response.data.on('data', (chunk) => {
+            const lines = chunk.toString().split('\n').filter(Boolean);
+            for (const line of lines) {
+                try {
+                    const json = JSON.parse(line);
+                    if (json.response) {
+                        fullText += json.response;
+                        res.write(`data: ${JSON.stringify({ token: json.response })}\n\n`);
+                    }
+                    if (json.done) {
+                        res.write(`data: ${JSON.stringify({ done: true, full: fullText })}\n\n`);
+                        res.end();
+                    }
+                } catch (e) { /* skip */ }
+            }
+        });
+
+        response.data.on('error', () => {
+            res.write(`data: ${JSON.stringify({ error: true })}\n\n`);
+            res.end();
+        });
+    } catch (err) {
+        res.write(`data: ${JSON.stringify({ error: true })}\n\n`);
+        res.end();
+    }
+}
+
+module.exports = { generateResponse, streamResponse };

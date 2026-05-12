@@ -48,14 +48,48 @@ const App = () => {
   const handleSendText = async () => {
     if (!input.trim()) return;
     const userMsg = { role: 'user', content: input };
+    const currentHistory = [...messages, userMsg];
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
+    // Add a placeholder assistant message to stream into
+    setMessages(prev => [...prev, { role: 'assistant', content: '', lang: 'mixed', streaming: true }]);
+
     try {
-      const res = await axios.post(`${API_BASE}/text`, { message: input, history: messages });
-      setMessages(prev => [...prev, { role: 'assistant', content: res.data.response, lang: res.data.lang }]);
-      if (res.data.slots) handleUpdateSlots(res.data.slots);
+      const res = await fetch(`${API_BASE}/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg.content, history: currentHistory })
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const lines = decoder.decode(value).split('\n').filter(l => l.startsWith('data: '));
+        for (const line of lines) {
+          const data = JSON.parse(line.replace('data: ', ''));
+          if (data.token) {
+            streamedText += data.token;
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'assistant', content: streamedText, lang: 'mixed', streaming: true };
+              return updated;
+            });
+          }
+          if (data.done) {
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1].streaming = false;
+              return updated;
+            });
+          }
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
