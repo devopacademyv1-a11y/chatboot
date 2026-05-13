@@ -29,7 +29,7 @@ function getDynamicExamples() {
     if (dataset.length === 0) return "";
     // Pick 3 random examples to keep the prompt fresh and diverse
     const shuffled = [...dataset].sort(() => 0.5 - Math.random());
-    const examples = shuffled.slice(0, 3);
+    const examples = shuffled.slice(0, 2);
     
     return examples.map(ex => `
 User: "${ex.user}"
@@ -59,6 +59,10 @@ async function streamResponse(userMessage, history = [], res) {
     const dynamicPrompt = `${BANKING_SYSTEM_PROMPT}\n\nLearning Patterns:\n${getDynamicExamples()}\n\nHistory:\n${history.slice(-4).map(m => m.role + ": " + m.content).join('\n')}\nUser: "${userMessage}"\nAssistant:`;
     
     res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // CRITICAL: Fixes Nginx buffering
+    
     try {
         const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
             model: OLLAMA_MODEL,

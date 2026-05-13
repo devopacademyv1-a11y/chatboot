@@ -5,7 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Trinnova AI - Chatbot Darija & Français" />
-    <title>Trinnova AI Chat</title>
+    <title>Trinnova AI - Banking Qualification</title>
+    <script>
+      // Suppress annoying browser extension errors (MetaMask, etc)
+      const originalError = console.error;
+      console.error = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && (args[0].includes('MetaMask') || args[0].includes('tabs:outgoing'))) {
+          return;
+        }
+        originalError.apply(console, args);
+      };
+      window.addEventListener('unhandledrejection', (event) => {
+        if (event.reason && event.reason.message && event.reason.message.includes('tabs:outgoing')) {
+          event.preventDefault();
+        }
+      });
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   </head>

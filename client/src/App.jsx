@@ -2,7 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Mic, Send, Volume2, StopCircle, Bot, Globe, Landmark, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
 
-const API_BASE = '/api/chat';
+const API_BASE = window.location.origin.includes('localhost') 
+  ? 'http://localhost:5000/api/chat' 
+  : `${window.location.origin}/api/chat`;
 
 const App = () => {
   const [messages, setMessages] = useState([
