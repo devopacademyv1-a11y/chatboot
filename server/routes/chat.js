@@ -10,23 +10,33 @@ const { detectLanguage } = require('../utils/detectLanguage');
 
 const upload = multer({ dest: 'temp/' });
 
+router.post('/tts', async (req, res) => {
+    try {
+        const { text, lang } = req.body;
+        const audioUrl = await generateSpeech(text, lang || 'fr');
+        res.json({ audioUrl });
+    } catch (e) {
+        res.status(500).json({ error: 'TTS Failed' });
+    }
+});
+
 /**
  * Streaming text chat (real-time tokens via SSE)
  */
 router.post('/stream', async (req, res) => {
-    const { message, history } = req.body;
+    const { message, history, slots } = req.body;
     const { lang } = detectLanguage(message);
-    await streamResponse(message, history || [], res);
+    await streamResponse(message, history || [], res, slots || {});
 });
 
 /**
  * Standard text chat (structured JSON for slot-filling)
  */
 router.post('/text', async (req, res) => {
-    const { message, history } = req.body;
+    const { message, history, slots } = req.body;
     try {
         const { lang } = detectLanguage(message);
-        const aiData = await generateResponse(message, history || [], lang);
+        const aiData = await generateResponse(message, history || [], lang, slots || {});
         res.json({ 
             response: aiData.message,
             slots: aiData.slots,
@@ -42,30 +52,12 @@ router.post('/text', async (req, res) => {
 /**
  * Voice lead qualification
  */
-router.post('/voice', upload.single('audio'), async (req, res) => {
-    const audioFile = req.file;
-    const history = JSON.parse(req.body.history || '[]');
+router.post('/transcribe', upload.single('audio'), async (req, res) => {
     try {
-        const transcription = await transcribeAudio(audioFile.path);
-        const { lang } = detectLanguage(transcription);
-        const aiData = await generateResponse(transcription, history, lang);
-        
-        const audioOutFilename = `response_${Date.now()}.wav`;
-        const audioOutPath = path.join(__dirname, '../temp', audioOutFilename);
-        await generateSpeech(aiData.message, audioOutPath, lang);
-
-        res.json({
-            transcription,
-            response: aiData.message,
-            slots: aiData.slots,
-            missing_info: aiData.missing_info,
-            audioUrl: `/temp/${audioOutFilename}`,
-            lang
-        });
-        fs.unlink(audioFile.path, () => {});
-    } catch (error) {
-        console.error('Voice Error:', error);
-        res.status(500).json({ error: 'Failed to process voice' });
+        const transcription = await transcribeAudio(req.file.path);
+        res.json({ transcription });
+    } catch (e) {
+        res.status(500).json({ error: 'Transcription Failed' });
     }
 });
 

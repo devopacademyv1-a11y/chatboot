@@ -39,87 +39,120 @@ const App = () => {
 
   const debtRatio = calculateDebtRatio();
 
-  const handleUpdateSlots = (newSlots) => {
+  const handleUpdateSlots = (newSlots = {}) => {
     setSlots(prev => ({
       project_type: newSlots.project_type || prev.project_type,
-      amount: newSlots.amount || prev.amount,
-      salary: newSlots.salary || prev.salary
+      amount: newSlots.amount ?? prev.amount,
+      salary: newSlots.salary ?? prev.salary
     }));
   };
 
-  const handleSendText = async () => {
-    if (!input.trim()) return;
-    const userMsg = { role: 'user', content: input };
-    const currentHistory = [...messages, userMsg];
-    setMessages(prev => [...prev, userMsg]);
+  const parseAssistantPayload = (text) => {
+    if (!text || !text.trim().startsWith('{')) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleSendText = async (e, text) => {
+    if (e) e.preventDefault();
+    const messageToSend = text || input;
+    if (!messageToSend.trim()) return;
+
+    const userMsg = { role: 'user', content: messageToSend };
+    const historyForRequest = messages;
+    const visibleMessages = [...messages, userMsg];
+    setMessages(visibleMessages);
     setInput('');
     setIsLoading(true);
 
-    // Add a placeholder assistant message to stream into
-    setMessages(prev => [...prev, { role: 'assistant', content: '', lang: 'mixed', streaming: true }]);
+    // Placeholder for assistant
+    setMessages([...visibleMessages, { role: 'assistant', content: '', lang: 'mixed', streaming: true }]);
 
     try {
       const res = await fetch(`${API_BASE}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg.content, history: currentHistory })
+        body: JSON.stringify({ message: messageToSend, history: historyForRequest, slots })
       });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Chat stream failed with status ${res.status}`);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let streamedText = '';
+      let buffer = '';
+      let finalPayload = null;
+
+      const applyAssistantText = (content, streaming = true) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'assistant', content, lang: 'mixed', streaming };
+          return updated;
+        });
+      };
+
+      const processEvent = (eventText) => {
+        const dataLines = eventText
+          .split('\n')
+          .filter(line => line.startsWith('data: '));
+
+        dataLines.forEach((line) => {
+          let data;
+          try {
+            data = JSON.parse(line.slice(6));
+          } catch {
+            return;
+          }
+
+          if (data.token) {
+            streamedText += data.token;
+            const parsedPayload = parseAssistantPayload(streamedText);
+            applyAssistantText(parsedPayload?.message || streamedText);
+          }
+
+          if (data.data) {
+            finalPayload = data.data;
+          } else if (data.full) {
+            finalPayload = parseAssistantPayload(data.full) || finalPayload;
+          }
+        });
+      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const lines = decoder.decode(value).split('\n').filter(l => l.startsWith('data: '));
-        for (const line of lines) {
-          const data = JSON.parse(line.replace('data: ', ''));
-          if (data.token) {
-            streamedText += data.token;
-            let displayContent = streamedText;
-            
-            // If it looks like JSON, try to extract the message part for a cleaner UI while streaming
-            if (streamedText.trim().startsWith('{')) {
-              const match = streamedText.match(/"message"\s*:\s*"([^"]*)"/);
-              if (match) displayContent = match[1];
-              else displayContent = "Analyse en cours...";
-            }
-
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: 'assistant', content: displayContent, lang: 'mixed', streaming: true };
-              return updated;
-            });
-          }
-          if (data.done) {
-            try {
-              // Try to parse the full text as JSON if it's structured
-              const finalJson = JSON.parse(streamedText);
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { 
-                  role: 'assistant', 
-                  content: finalJson.message || streamedText, 
-                  lang: 'mixed', 
-                  streaming: false 
-                };
-                return updated;
-              });
-              if (finalJson.slots) handleUpdateSlots(finalJson.slots);
-            } catch (e) {
-              // Not JSON or partial JSON, just finish streaming
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1].streaming = false;
-                return updated;
-              });
-            }
-          }
-        }
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        events.forEach(processEvent);
       }
+
+      if (buffer.trim()) processEvent(buffer);
+
+      // Final Cleanup & Voice
+      const cleanText = finalPayload?.message || parseAssistantPayload(streamedText)?.message || streamedText;
+      if (cleanText) {
+        try {
+          applyAssistantText(cleanText, false);
+          if (finalPayload?.slots) handleUpdateSlots(finalPayload.slots);
+          
+          const ttsRes = await axios.post(`${API_BASE}/tts`, { 
+            text: cleanText,
+            lang: cleanText.match(/[a-zA-Z]/) ? 'fr' : 'ar' 
+          });
+          if (ttsRes.data.audioUrl) {
+            new Audio(`${window.location.origin}${ttsRes.data.audioUrl}`).play();
+          }
+        } catch (e) { console.error("Post-stream processing failed", e); }
+      }
+
     } catch (err) {
-      console.error(err);
+      console.error("Streaming error", err);
     } finally {
       setIsLoading(false);
     }
@@ -157,19 +190,16 @@ const App = () => {
     setIsLoading(true);
     const formData = new FormData();
     formData.append('audio', blob);
-    formData.append('history', JSON.stringify(messages));
 
     try {
-      const res = await axios.post(`${API_BASE}/voice`, formData);
-      setMessages(prev => [
-        ...prev, 
-        { role: 'user', content: res.data.transcription },
-        { role: 'assistant', content: res.data.response, lang: res.data.lang, audioUrl: res.data.audioUrl }
-      ]);
-      if (res.data.slots) handleUpdateSlots(res.data.slots);
-      if (res.data.audioUrl) new Audio(res.data.audioUrl).play();
+      const res = await axios.post(`${API_BASE}/transcribe`, formData);
+      const text = res.data.transcription;
+      if (text) {
+        // Now trigger the normal text send logic with the transcribed text!
+        handleSendText(null, text);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Transcription failed", err);
     } finally {
       setIsLoading(false);
     }
@@ -288,22 +318,50 @@ const App = () => {
           {messages.map((msg, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '1.5rem' }}>
               <div className="message-bubble" style={{ 
-                maxWidth: '70%', padding: '1.2rem', borderRadius: '18px',
+                maxWidth: '75%', padding: '1rem 1.4rem', borderRadius: '20px',
                 background: msg.role === 'user' ? 'var(--primary)' : 'var(--glass)',
-                border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.1)'
+                border: msg.role === 'user' ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+                position: 'relative'
               }}>
-                <div style={{ fontSize: '1rem', lineHeight: '1.5' }}>{msg.content}</div>
+                <div style={{ fontSize: '0.95rem', lineHeight: '1.6', color: '#fff' }}>{msg.content}</div>
                 {msg.audioUrl && (
-                  <button onClick={() => new Audio(msg.audioUrl).play()} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginTop: '10px' }}>
-                    <Volume2 size={18} />
+                  <button onClick={() => new Audio(msg.audioUrl).play()} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Volume2 size={16} /> <span style={{ fontSize: '0.7rem' }}>Écouter</span>
                   </button>
                 )}
               </div>
             </div>
           ))}
-          {isLoading && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Analyse financière...</div>}
+          
+          {/* PREMIUM TYPING INDICATOR */}
+          {isLoading && (
+            <div style={{ display: 'flex', gap: '8px', padding: '12px 20px', background: 'var(--glass)', borderRadius: '20px', width: 'fit-content', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div className="typing-dot" style={{ width: '6px', height: '6px', background: 'var(--primary)', borderRadius: '50%', animation: 'typing 1.4s infinite ease-in-out' }} />
+              <div className="typing-dot" style={{ width: '6px', height: '6px', background: 'var(--primary)', borderRadius: '50%', animation: 'typing 1.4s infinite ease-in-out 0.2s' }} />
+              <div className="typing-dot" style={{ width: '6px', height: '6px', background: 'var(--primary)', borderRadius: '50%', animation: 'typing 1.4s infinite ease-in-out 0.4s' }} />
+            </div>
+          )}
           <div ref={scrollRef} />
         </div>
+
+        <style>{`
+          @keyframes typing {
+            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+            40% { transform: translateY(-6px); opacity: 1; }
+          }
+          .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 1.2rem;
+            border-radius: 16px;
+            transition: all 0.3s ease;
+          }
+          .card:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--primary);
+          }
+        `}</style>
 
         <div className="chat-input-area">
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', maxWidth: '900px', margin: '0 auto' }}>
